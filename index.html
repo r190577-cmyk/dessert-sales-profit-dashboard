@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #16161e;
+    --card: #1e1e2a;
+    --border: #2a2a3a;
+    --amber: #f5a623;
+    --amber-dim: #c47d0e;
+    --green: #4ade80;
+    --red: #f87171;
+    --text: #e8e8f0;
+    --muted: #7070a0;
+    --accent: #7c6aff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+  .header {
+    background: linear-gradient(135deg, #1a1025 0%, #0e0e18 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header h1 { font-family:'Playfair Display',serif; font-size:28px; color:var(--amber); letter-spacing:0.5px; }
+  .header p { color:var(--muted); font-size:13px; margin-top:4px; }
+  .header-badge { background:var(--amber); color:#000; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
+
+  .container { max-width:1400px; margin:0 auto; padding:24px 32px; }
+
+  /* KPI Cards */
+  .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; position:relative; overflow:hidden; }
+  .kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .kpi.amber::before { background:var(--amber); }
+  .kpi.green::before { background:var(--green); }
+  .kpi.red::before { background:var(--red); }
+  .kpi.accent::before { background:var(--accent); }
+  .kpi-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .kpi-value { font-family:'Playfair Display',serif; font-size:30px; font-weight:700; }
+  .kpi.amber .kpi-value { color:var(--amber); }
+  .kpi.green .kpi-value { color:var(--green); }
+  .kpi.red .kpi-value { color:var(--red); }
+  .kpi.accent .kpi-value { color:var(--accent); }
+  .kpi-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+
+  /* Slicers */
+  .slicer-bar { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:24px; }
+  .slicer-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+  .slicer-row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .slicer-group { display:flex; flex-direction:column; gap:6px; min-width:160px; }
+  .slicer-group label { font-size:12px; color:var(--muted); }
+  .slicer-group select {
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    padding:8px 12px; border-radius:8px; font-size:13px; font-family:'DM Sans',sans-serif;
+    cursor:pointer; outline:none; min-width:160px;
+  }
+  .slicer-group select:focus { border-color:var(--amber); }
+  .reset-btn {
+    background:var(--amber); color:#000; border:none; padding:9px 18px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;
+    font-family:'DM Sans',sans-serif; align-self:flex-end;
+  }
+  .reset-btn:hover { background:var(--amber-dim); }
+
+  /* Grid layouts */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:20px; }
+  .full { margin-bottom:20px; }
+
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .panel-title { font-family:'Playfair Display',serif; font-size:16px; color:var(--amber); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .panel-title span { font-size:11px; color:var(--muted); font-family:'DM Sans',sans-serif; margin-left:auto; }
+
+  /* Tables */
+  .table-wrap { overflow-x:auto; max-height:320px; overflow-y:auto; }
+  .table-wrap::-webkit-scrollbar { width:4px; height:4px; }
+  .table-wrap::-webkit-scrollbar-track { background:var(--surface); }
+  .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th { background:var(--surface); color:var(--muted); text-transform:uppercase; font-size:10px; letter-spacing:0.8px; padding:10px 12px; text-align:left; position:sticky; top:0; z-index:1; border-bottom:1px solid var(--border); }
+  td { padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.04); }
+  tr:hover td { background:rgba(245,166,35,0.04); }
+  .profit-pos { color:var(--green); font-weight:500; }
+  .profit-neg { color:var(--red); font-weight:500; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+  .badge-yes { background:rgba(74,222,128,0.15); color:var(--green); }
+  .badge-no { background:rgba(248,113,113,0.15); color:var(--red); }
+
+  /* Chart canvas */
+  .chart-container { position:relative; height:260px; }
+
+  /* Discount Analysis */
+  .analysis-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .analysis-card { background:var(--surface); border-radius:10px; padding:16px; border-left:3px solid; }
+  .analysis-card.profit { border-color:var(--green); }
+  .analysis-card.loss { border-color:var(--red); }
+  .analysis-card h4 { font-size:13px; margin-bottom:10px; }
+  .analysis-card.profit h4 { color:var(--green); }
+  .analysis-card.loss h4 { color:var(--red); }
+  .rest-item { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .rest-item:last-child { border:none; }
+  .rest-scroll { max-height:200px; overflow-y:auto; }
+
+  .section-divider { display:flex; align-items:center; gap:12px; margin:8px 0 20px; }
+  .section-divider span { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; white-space:nowrap; }
+  .section-divider::before, .section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🍽️ Restaurant Analytics</h1>
+    <p>Dessert Orders · Profit & Loss · Discount Intelligence</p>
+  </div>
+  <div class="header-badge">500 Orders · 100 Restaurants · 100 Customers</div>
+</div>
+
+<div class="container">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <!-- Slicers -->
+  <div class="slicer-bar">
+    <div class="slicer-title">🎛️ Interactive Slicers — Filter all charts & tables below</div>
+    <div class="slicer-row">
+      <div class="slicer-group">
+        <label>Discount Eligible</label>
+        <select id="sDiscount"><option value="">All</option><option>YES</option><option>NO</option></select>
+      </div>
+      <div class="slicer-group">
+        <label>Customer ID</label>
+        <select id="sCustomer"><option value="">All Customers</option></select>
+      </div>
+      <div class="slicer-group">
+        <label>Restaurant ID</label>
+        <select id="sRestaurant"><option value="">All Restaurants</option></select>
+      </div>
+      <div class="slicer-group">
+        <label>Dessert ID</label>
+        <select id="sDessert"><option value="">All Desserts</option></select>
+      </div>
+      <button class="reset-btn" onclick="resetFilters()">↺ Reset All</button>
+    </div>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="section-divider"><span>Order Summary Pivot</span></div>
+  <div class="full panel">
+    <div class="panel-title">📋 Orders by Customer × Restaurant × Discount <span id="orderCount"></span></div>
+    <div class="table-wrap" id="mainPivotWrap"></div>
+  </div>
+
+  <!-- Section 2 -->
+  <div class="section-divider"><span>Restaurant Profit & Charts</span></div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">🏪 Total Profit by Restaurant</div>
+      <div class="table-wrap" id="restProfitWrap"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">📊 Profit by Discount Eligibility</div>
+      <div class="chart-container"><canvas id="discountBarChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Section 3 -->
+  <div class="section-divider"><span>Discount Pivot & Monthly Trend</span></div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">🏷️ Discount Eligible Pivot (Sum of Profit)</div>
+      <div style="margin-bottom:16px" id="discountPivotTable"></div>
+      <div class="chart-container"><canvas id="discountColChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">📈 Monthly Profit Trend</div>
+      <div class="chart-container"><canvas id="monthlyLineChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Section 4 -->
+  <div class="section-divider"><span>50% Discount Intelligence — Restaurants with ≥1000 Orders</span></div>
+  <div class="full panel">
+    <div class="panel-title">🧠 50% Discount Analysis: Which Restaurants Profit vs Loss?</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Restaurants where Total_Orders ≥ 1000 receive dessert at 50% discount. This table shows if that discount results in profit or loss based on actual order data.</p>
+    <div class="analysis-grid">
+      <div class="analysis-card profit">
+        <h4>✅ PROFITABLE with 50% Discount</h4>
+        <div class="rest-scroll" id="profitRestList"></div>
+      </div>
+      <div class="analysis-card loss">
+        <h4>❌ LOSS with 50% Discount</h4>
+        <div class="rest-scroll" id="lossRestList"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== RAW DATA =====
+const customers = {
+  C001:{name:'Customer_1',city:'Pune',orders:488},C002:{name:'Customer_2',city:'Mumbai',orders:1700},C003:{name:'Customer_3',city:'Pune',orders:760},C004:{name:'Customer_4',city:'Kolkata',orders:889},C005:{name:'Customer_5',city:'Kolkata',orders:616},C006:{name:'Customer_6',city:'Mumbai',orders:1734},C007:{name:'Customer_7',city:'Jaipur',orders:1527},C008:{name:'Customer_8',city:'Jaipur',orders:1532},C009:{name:'Customer_9',city:'Kolkata',orders:1615},C010:{name:'Customer_10',city:'Jaipur',orders:443},C011:{name:'Customer_11',city:'Delhi',orders:670},C012:{name:'Customer_12',city:'Bangalore',orders:375},C013:{name:'Customer_13',city:'Hyderabad',orders:1329},C014:{name:'Customer_14',city:'Kolkata',orders:1632},C015:{name:'Customer_15',city:'Chennai',orders:1689},C016:{name:'Customer_16',city:'Mumbai',orders:1929},C017:{name:'Customer_17',city:'Hyderabad',orders:526},C018:{name:'Customer_18',city:'Delhi',orders:359},C019:{name:'Customer_19',city:'Bangalore',orders:411},C020:{name:'Customer_20',city:'Mumbai',orders:1806},
+  C021:{name:'Customer_21',city:'Kolkata',orders:596},C022:{name:'Customer_22',city:'Kolkata',orders:1490},C023:{name:'Customer_23',city:'Chennai',orders:607},C024:{name:'Customer_24',city:'Chennai',orders:1018},C025:{name:'Customer_25',city:'Chennai',orders:667},C026:{name:'Customer_26',city:'Jaipur',orders:998},C027:{name:'Customer_27',city:'Delhi',orders:1637},C028:{name:'Customer_28',city:'Delhi',orders:645},C029:{name:'Customer_29',city:'Jaipur',orders:415},C030:{name:'Customer_30',city:'Chennai',orders:729},C031:{name:'Customer_31',city:'Chennai',orders:675},C032:{name:'Customer_32',city:'Pune',orders:666},C033:{name:'Customer_33',city:'Hyderabad',orders:229},C034:{name:'Customer_34',city:'Mumbai',orders:461},C035:{name:'Customer_35',city:'Bangalore',orders:1731},C036:{name:'Customer_36',city:'Hyderabad',orders:315},C037:{name:'Customer_37',city:'Chennai',orders:1732},C038:{name:'Customer_38',city:'Jaipur',orders:1416},C039:{name:'Customer_39',city:'Jaipur',orders:1356},C040:{name:'Customer_40',city:'Delhi',orders:228},
+  C041:{name:'Customer_41',city:'Pune',orders:372},C042:{name:'Customer_42',city:'Delhi',orders:1173},C043:{name:'Customer_43',city:'Hyderabad',orders:1523},C044:{name:'Customer_44',city:'Kolkata',orders:788},C045:{name:'Customer_45',city:'Bangalore',orders:1460},C046:{name:'Customer_46',city:'Hyderabad',orders:1644},C047:{name:'Customer_47',city:'Mumbai',orders:514},C048:{name:'Customer_48',city:'Bangalore',orders:576},C049:{name:'Customer_49',city:'Chennai',orders:1069},C050:{name:'Customer_50',city:'Delhi',orders:1684},C051:{name:'Customer_51',city:'Jaipur',orders:1317},C052:{name:'Customer_52',city:'Kolkata',orders:421},C053:{name:'Customer_53',city:'Jaipur',orders:1389},C054:{name:'Customer_54',city:'Mumbai',orders:667},C055:{name:'Customer_55',city:'Delhi',orders:799},C056:{name:'Customer_56',city:'Mumbai',orders:859},C057:{name:'Customer_57',city:'Mumbai',orders:1330},C058:{name:'Customer_58',city:'Jaipur',orders:1292},C059:{name:'Customer_59',city:'Bangalore',orders:1082},C060:{name:'Customer_60',city:'Mumbai',orders:788},
+  C061:{name:'Customer_61',city:'Jaipur',orders:992},C062:{name:'Customer_62',city:'Kolkata',orders:1102},C063:{name:'Customer_63',city:'Pune',orders:295},C064:{name:'Customer_64',city:'Chennai',orders:1299},C065:{name:'Customer_65',city:'Bangalore',orders:353},C066:{name:'Customer_66',city:'Kolkata',orders:1810},C067:{name:'Customer_67',city:'Bangalore',orders:1183},C068:{name:'Customer_68',city:'Chennai',orders:739},C069:{name:'Customer_69',city:'Jaipur',orders:1375},C070:{name:'Customer_70',city:'Pune',orders:1370},C071:{name:'Customer_71',city:'Kolkata',orders:1580},C072:{name:'Customer_72',city:'Kolkata',orders:726},C073:{name:'Customer_73',city:'Bangalore',orders:1345},C074:{name:'Customer_74',city:'Delhi',orders:663},C075:{name:'Customer_75',city:'Hyderabad',orders:1379},C076:{name:'Customer_76',city:'Jaipur',orders:1867},C077:{name:'Customer_77',city:'Kolkata',orders:435},C078:{name:'Customer_78',city:'Jaipur',orders:232},C079:{name:'Customer_79',city:'Kolkata',orders:418},C080:{name:'Customer_80',city:'Kolkata',orders:257},
+  C081:{name:'Customer_81',city:'Delhi',orders:1377},C082:{name:'Customer_82',city:'Delhi',orders:1916},C083:{name:'Customer_83',city:'Kolkata',orders:1276},C084:{name:'Customer_84',city:'Jaipur',orders:1758},C085:{name:'Customer_85',city:'Bangalore',orders:1931},C086:{name:'Customer_86',city:'Kolkata',orders:965},C087:{name:'Customer_87',city:'Kolkata',orders:773},C088:{name:'Customer_88',city:'Chennai',orders:850},C089:{name:'Customer_89',city:'Delhi',orders:719},C090:{name:'Customer_90',city:'Mumbai',orders:731},C091:{name:'Customer_91',city:'Pune',orders:933},C092:{name:'Customer_92',city:'Delhi',orders:771},C093:{name:'Customer_93',city:'Mumbai',orders:1542},C094:{name:'Customer_94',city:'Hyderabad',orders:994},C095:{name:'Customer_95',city:'Kolkata',orders:1199},C096:{name:'Customer_96',city:'Hyderabad',orders:873},C097:{name:'Customer_97',city:'Chennai',orders:205},C098:{name:'Customer_98',city:'Jaipur',orders:1385},C099:{name:'Customer_99',city:'Delhi',orders:1781},C100:{name:'Customer_100',city:'Kolkata',orders:1785}
+};
+
+const rawOrders = [
+  ['O0001','2025-11-26','C016','R003','D044',3,173,'YES',86.5,49.5],
+  ['O0002','2025-07-06','C069','R097','D001',4,135,'YES',67.5,14],
+  ['O0003','2025-07-08','C079','R060','D015',1,142,'NO',142,63],
+  ['O0004','2025-06-29','C097','R074','D042',4,188,'NO',188,396],
+  ['O0005','2025-04-07','C021','R023','D031',4,161,'NO',161,288],
+  ['O0006','2025-09-01','C062','R020','D034',2,158,'YES',79,14],
+  ['O0007','2025-03-17','C074','R072','D009',5,160,'NO',160,380],
+  ['O0008','2025-02-11','C044','R095','D023',4,179,'NO',179,552],
+  ['O0009','2025-03-07','C100','R054','D010',4,139,'YES',69.5,30],
+  ['O0010','2025-10-21','C013','R049','D030',5,248,'YES',124,310],
+  ['O0011','2025-09-27','C051','R049','D049',3,178,'YES',89,144],
+  ['O0012','2025-09-27','C034','R073','D004',2,240,'NO',240,394],
+  ['O0013','2025-05-12','C092','R008','D047',1,121,'NO',121,36],
+  ['O0014','2025-08-03','C001','R077','D029',2,233,'NO',233,326],
+  ['O0015','2025-05-20','C063','R020','D047',2,228,'NO',228,286],
+  ['O0016','2025-09-19','C061','R029','D039',3,202,'NO',202,471],
+  ['O0017','2025-01-10','C094','R020','D018',4,132,'NO',132,228],
+  ['O0018','2025-06-24','C079','R030','D042',5,226,'NO',226,685],
+  ['O0019','2025-07-24','C017','R014','D031',1,225,'NO',225,136],
+  ['O0020','2025-08-20','C042','R062','D003',2,221,'YES',110.5,53],
+  ['O0021','2025-12-15','C059','R087','D035',2,147,'YES',73.5,5],
+  ['O0022','2025-04-09','C064','R020','D025',2,213,'YES',106.5,59],
+  ['O0023','2025-09-13','C096','R015','D029',3,115,'NO',115,135],
+  ['O0024','2026-01-20','C055','R029','D036',4,241,'NO',241,716],
+  ['O0025','2025-11-23','C076','R005','D027',2,104,'YES',52,4],
+  ['O0026','2025-11-05','C016','R075','D015',5,206,'YES',103,120],
+  ['O0027','2025-05-11','C083','R098','D016',5,176,'YES',88,95],
+  ['O0028','2025-01-09','C066','R042','D036',2,201,'YES',100.5,77],
+  ['O0029','2025-01-18','C031','R032','D049',1,222,'NO',222,181],
+  ['O0030','2025-03-11','C023','R032','D001',4,156,'NO',156,368],
+  ['O0031','2025-08-11','C030','R076','D007',5,175,'NO',175,540],
+  ['O0032','2025-06-14','C051','R053','D017',2,154,'YES',77,34],
+  ['O0033','2026-01-31','C016','R028','D015',2,183,'YES',91.5,25],
+  ['O0034','2025-09-01','C005','R093','D007',3,222,'NO',222,465],
+  ['O0035','2025-12-30','C059','R085','D003',1,217,'YES',108.5,24.5],
+  ['O0036','2025-02-11','C064','R076','D029',5,126,'YES',63,-35],
+  ['O0037','2025-06-11','C031','R052','D042',5,139,'NO',139,250],
+  ['O0038','2025-04-16','C023','R046','D030',1,203,'NO',203,141],
+  ['O0039','2025-04-01','C035','R033','D004',2,174,'YES',87,88],
+  ['O0040','2025-12-23','C033','R034','D032',1,219,'NO',219,136],
+  ['O0041','2025-05-05','C034','R090','D032',3,243,'NO',243,480],
+  ['O0042','2025-08-25','C026','R090','D002',3,234,'NO',234,498],
+  ['O0043','2025-03-07','C030','R047','D024',5,115,'NO',115,295],
+  ['O0044','2025-02-27','C071','R075','D022',1,124,'YES',62,-3],
+  ['O0045','2025-02-06','C062','R025','D029',5,211,'YES',105.5,177.5],
+  ['O0046','2025-01-18','C053','R085','D001',5,161,'YES',80.5,82.5],
+  ['O0047','2025-11-22','C058','R094','D018',5,143,'YES',71.5,-17.5],
+  ['O0048','2025-07-26','C077','R032','D040',5,165,'NO',165,425],
+  ['O0049','2025-12-07','C010','R016','D008',4,108,'NO',108,136],
+  ['O0050','2025-01-13','C043','R099','D033',4,150,'YES',75,112],
+  ['O0051','2025-07-27','C054','R088','D039',3,121,'NO',121,228],
+  ['O0052','2025-04-27','C097','R092','D049',4,210,'NO',210,676],
+  ['O0053','2025-05-17','C041','R068','D024',4,232,'NO',232,704],
+  ['O0054','2025-12-12','C073','R060','D045',5,116,'YES',58,-30],
+  ['O0055','2025-05-18','C090','R057','D044',3,214,'NO',214,432],
+  ['O0056','2025-09-18','C098','R029','D008',2,246,'YES',123,98],
+  ['O0057','2025-12-18','C085','R086','D024',1,137,'YES',68.5,12.5],
+  ['O0058','2025-03-13','C058','R023','D045',4,206,'YES',103,156],
+  ['O0059','2025-07-04','C029','R057','D035',4,201,'NO',201,520],
+  ['O0060','2025-11-01','C048','R060','D022',4,243,'NO',243,712],
+  ['O0061','2025-06-26','C002','R008','D021',1,137,'YES',68.5,5.5],
+  ['O0062','2025-04-03','C025','R063','D042',2,122,'NO',122,66],
+  ['O0063','2025-04-28','C005','R049','D032',1,212,'NO',212,129],
+  ['O0064','2025-12-24','C097','R047','D048',2,248,'NO',248,412],
+  ['O0065','2025-03-08','C047','R085','D049',3,125,'NO',125,252],
+  ['O0066','2025-03-02','C024','R030','D030',2,113,'YES',56.5,-11],
+  ['O0067','2025-03-21','C039','R088','D021',3,230,'YES',115,156],
+  ['O0068','2025-01-03','C015','R046','D029',2,130,'YES',65,-10],
+  ['O0069','2025-09-11','C026','R075','D021',2,235,'NO',235,344],
+  ['O0070','2025-06-10','C001','R089','D046',1,169,'NO',169,126],
+  ['O0071','2025-05-21','C091','R007','D019',2,195,'NO',195,222],
+  ['O0072','2025-07-16','C036','R087','D037',2,200,'NO',200,292],
+  ['O0073','2025-05-09','C049','R087','D007',3,240,'YES',120,159],
+  ['O0074','2026-01-26','C087','R014','D023',1,156,'NO',156,115],
+  ['O0075','2026-01-16','C089','R027','D030',1,191,'NO',191,129],
+  ['O0076','2026-02-03','C088','R037','D020',3,140,'NO',140,255],
+  ['O0077','2025-12-03','C081','R052','D039',5,201,'YES',100.5,277.5],
+  ['O0078','2025-04-29','C003','R002','D028',2,235,'NO',235,320],
+  ['O0079','2025-01-02','C071','R074','D007',2,173,'YES',86.5,39],
+  ['O0080','2025-08-17','C001','R030','D048',3,193,'NO',193,453],
+  ['O0081','2025-04-21','C003','R081','D033',2,213,'NO',213,332],
+  ['O0082','2025-01-14','C018','R080','D021',1,145,'NO',145,82],
+  ['O0083','2025-02-09','C097','R039','D002',1,108,'NO',108,40],
+  ['O0084','2025-03-14','C059','R083','D023',2,211,'YES',105.5,129],
+  ['O0085','2025-10-22','C049','R069','D049',2,157,'YES',78.5,75],
+  ['O0086','2025-02-19','C068','R057','D029',2,114,'NO',114,88],
+  ['O0087','2026-01-06','C013','R019','D038',3,180,'YES',90,60],
+  ['O0088','2025-06-10','C003','R012','D004',1,181,'NO',181,138],
+  ['O0089','2025-02-22','C008','R021','D038',3,185,'YES',92.5,67.5],
+  ['O0090','2025-08-02','C005','R004','D034',4,236,'NO',236,656],
+  ['O0091','2025-01-04','C046','R011','D031',2,202,'YES',101,24],
+  ['O0092','2025-07-17','C023','R047','D007',1,241,'NO',241,174],
+  ['O0093','2025-01-20','C064','R033','D050',2,183,'YES',91.5,21],
+  ['O0094','2025-01-26','C088','R005','D038',2,196,'NO',196,252],
+  ['O0095','2025-08-30','C008','R071','D005',1,126,'YES',63,-5],
+  ['O0096','2025-12-28','C052','R080','D046',4,206,'NO',206,652],
+  ['O0097','2025-03-30','C036','R066','D013',1,198,'NO',198,153],
+  ['O0098','2025-08-06','C035','R085','D009',2,218,'YES',109,50],
+  ['O0099','2025-12-29','C064','R006','D044',4,193,'YES',96.5,106],
+  ['O0100','2026-01-02','C048','R034','D006',3,240,'NO',240,465],
+  ['O0101','2025-03-10','C013','R092','D011',5,107,'YES',53.5,-17.5],
+  ['O0102','2025-10-20','C036','R029','D041',3,158,'NO',158,309],
+  ['O0103','2025-12-22','C025','R054','D006',5,111,'NO',111,130],
+  ['O0104','2025-04-13','C020','R010','D035',4,124,'YES',62,-36],
+  ['O0105','2025-07-23','C025','R088','D005',3,181,'NO',181,339],
+  ['O0106','2026-01-22','C055','R021','D027',5,182,'NO',182,660],
+  ['O0107','2025-01-01','C062','R058','D030',3,124,'YES',62,0],
+  ['O0108','2025-09-08','C071','R095','D025',4,177,'YES',88.5,46],
+  ['O0109','2025-04-09','C041','R026','D047',3,112,'NO',112,81],
+  ['O0110','2026-01-24','C014','R065','D022',4,233,'YES',116.5,206],
+  ['O0111','2025-03-04','C003','R035','D009',3,182,'NO',182,294],
+  ['O0112','2025-04-27','C095','R018','D029',3,171,'YES',85.5,46.5],
+  ['O0113','2025-07-29','C099','R032','D030',2,154,'YES',77,30],
+  ['O0114','2025-06-03','C061','R022','D024',5,228,'NO',228,860],
+  ['O0115','2025-04-01','C050','R010','D027',2,131,'YES',65.5,31],
+  ['O0116','2025-05-31','C013','R082','D043',5,235,'YES',117.5,277.5],
+  ['O0117','2025-02-15','C088','R058','D041',2,250,'NO',250,390],
+  ['O0118','2025-06-26','C055','R052','D006',1,242,'NO',242,157],
+  ['O0119','2025-10-26','C096','R030','D041',5,148,'NO',148,465],
+  ['O0120','2025-03-04','C045','R031','D028',4,240,'YES',120,180],
+  ['O0121','2025-01-03','C081','R036','D044',4,109,'YES',54.5,-62],
+  ['O0122','2025-04-25','C069','R089','D026',5,218,'YES',109,340],
+  ['O0123','2025-11-23','C091','R042','D009',1,198,'NO',198,114],
+  ['O0124','2025-06-20','C099','R099','D050',5,117,'YES',58.5,-112.5],
+  ['O0125','2025-07-03','C024','R028','D014',1,131,'YES',65.5,15.5],
+  ['O0126','2025-11-01','C093','R098','D029',5,230,'YES',115,225],
+  ['O0127','2025-05-08','C050','R048','D012',3,114,'YES',57,-48],
+  ['O0128','2025-04-29','C018','R100','D013',2,180,'NO',180,270],
+  ['O0129','2025-10-15','C032','R025','D050',2,142,'NO',142,122],
+  ['O0130','2025-11-12','C046','R053','D014',1,193,'YES',96.5,46.5],
+  ['O0131','2025-07-22','C083','R055','D018',4,194,'YES',97,88],
+  ['O0132','2025-08-13','C003','R065','D004',2,235,'NO',235,384],
+  ['O0133','2025-07-19','C031','R083','D003',5,180,'NO',180,480],
+  ['O0134','2025-11-22','C046','R055','D039',4,184,'YES',92,188],
+  ['O0135','2025-10-16','C035','R084','D040',2,155,'YES',77.5,-5],
+  ['O0136','2025-08-28','C019','R060','D043',5,146,'NO',146,420],
+  ['O0137','2025-12-08','C007','R095','D020',5,250,'YES',125,350],
+  ['O0138','2025-05-11','C034','R017','D015',1,248,'NO',248,169],
+  ['O0139','2025-07-17','C087','R011','D014',1,132,'NO',132,82],
+  ['O0140','2025-04-23','C078','R099','D011',5,108,'NO',108,255],
+  ['O0141','2025-08-19','C038','R024','D027',1,209,'YES',104.5,54.5],
+  ['O0142','2025-12-10','C079','R039','D018',1,236,'NO',236,161],
+  ['O0143','2025-09-16','C041','R090','D048',5,112,'NO',112,350],
+  ['O0144','2025-12-03','C055','R074','D017',5,162,'NO',162,510],
+  ['O0145','2025-01-16','C021','R041','D032',1,100,'NO',100,17],
+  ['O0146','2026-02-04','C094','R016','D022',4,232,'NO',232,668],
+  ['O0147','2025-02-23','C049','R056','D001',2,117,'YES',58.5,-11],
+  ['O0148','2025-12-11','C099','R056','D043',2,138,'YES',69,14],
+  ['O0149','2025-12-18','C031','R033','D015',2,178,'NO',178,198],
+  ['O0150','2025-05-07','C027','R007','D045',1,188,'YES',94,30],
+  ['O0151','2025-08-28','C061','R029','D038',1,150,'NO',150,80],
+  ['O0152','2025-12-18','C070','R067','D003',3,121,'YES',60.5,-70.5],
+  ['O0153','2025-02-14','C045','R061','D024',3,162,'YES',81,75],
+  ['O0154','2026-01-21','C013','R085','D019',5,169,'YES',84.5,2.5],
+  ['O0155','2025-07-08','C012','R042','D025',5,219,'NO',219,710],
+  ['O0156','2025-10-07','C008','R036','D004',5,133,'YES',66.5,117.5],
+  ['O0157','2025-06-23','C081','R079','D031',4,240,'YES',120,124],
+  ['O0158','2025-11-22','C045','R070','D047',2,203,'YES',101.5,33],
+  ['O0159','2025-12-24','C095','R044','D040',5,236,'YES',118,190],
+  ['O0160','2025-12-14','C030','R099','D031',3,154,'NO',154,195],
+  ['O0161','2025-06-25','C042','R076','D022',2,213,'YES',106.5,83],
+  ['O0162','2025-11-26','C058','R067','D025',3,136,'YES',68,-27],
+  ['O0163','2025-04-18','C070','R079','D046',2,174,'YES',87,88],
+  ['O0164','2025-11-01','C013','R026','D037',1,227,'YES',113.5,59.5],
+  ['O0165','2025-05-21','C028','R065','D015',1,216,'NO',216,137],
+  ['O0166','2025-03-19','C096','R093','D017',2,245,'NO',245,370],
+  ['O0167','2025-08-13','C064','R064','D007',2,236,'YES',118,102],
+  ['O0168','2025-03-08','C056','R092','D019',5,123,'NO',123,195],
+  ['O0169','2025-09-30','C003','R033','D014',4,105,'NO',105,220],
+  ['O0170','2025-06-24','C098','R016','D018',2,235,'YES',117.5,85],
+  ['O0171','2025-07-29','C039','R006','D021',3,212,'YES',106,129],
+  ['O0172','2025-10-05','C100','R048','D037',2,140,'YES',70,32],
+  ['O0173','2025-09-25','C096','R025','D001',1,186,'NO',186,122],
+  ['O0174','2025-11-13','C062','R052','D019',1,109,'YES',54.5,-29.5],
+  ['O0175','2025-05-26','C088','R047','D049',2,197,'NO',197,312],
+  ['O0176','2025-12-28','C038','R074','D006',5,193,'YES',96.5,57.5],
+  ['O0177','2025-12-03','C059','R068','D012',4,164,'YES',82,36],
+  ['O0178','2025-07-12','C043','R048','D007',2,129,'YES',64.5,-5],
+  ['O0179','2025-09-03','C091','R057','D041',5,208,'NO',208,765],
+  ['O0180','2025-03-29','C026','R056','D013',3,138,'NO',138,279],
+  ['O0181','2025-11-28','C083','R047','D029',1,240,'YES',120,50],
+  ['O0182','2025-11-22','C043','R049','D012',5,209,'YES',104.5,157.5],
+  ['O0183','2025-07-18','C062','R064','D014',5,122,'YES',61,55],
+  ['O0184','2025-06-07','C007','R040','D044',2,106,'YES',53,-34],
+  ['O0185','2025-02-03','C027','R021','D006',5,219,'YES',109.5,122.5],
+  ['O0186','2025-12-23','C060','R014','D012',3,130,'NO',130,171],
+  ['O0187','2025-02-24','C050','R046','D001',4,171,'YES',85.5,86],
+  ['O0188','2025-06-26','C032','R013','D018',5,233,'NO',233,790],
+  ['O0189','2025-12-06','C040','R018','D042',3,171,'NO',171,246],
+  ['O0190','2025-12-11','C044','R070','D037',3,137,'NO',137,249],
+  ['O0191','2025-08-07','C059','R056','D014',1,227,'YES',113.5,63.5],
+  ['O0192','2025-08-21','C068','R052','D025',2,146,'NO',146,138],
+  ['O0193','2026-02-05','C029','R058','D014',2,189,'NO',189,278],
+  ['O0194','2025-10-24','C097','R019','D022',3,240,'NO',240,525],
+  ['O0195','2025-05-16','C089','R075','D037',5,127,'NO',127,365],
+  ['O0196','2025-05-22','C016','R090','D031',5,215,'YES',107.5,92.5],
+  ['O0197','2025-02-22','C072','R068','D022',3,224,'NO',224,477],
+  ['O0198','2025-02-05','C037','R008','D035',5,135,'YES',67.5,-17.5],
+  ['O0199','2025-04-07','C004','R015','D029',3,180,'NO',180,330],
+  ['O0200','2025-10-16','C007','R082','D005',5,211,'YES',105.5,187.5],
+  ['O0201','2025-11-15','C045','R084','D035',4,153,'YES',76.5,22],
+  ['O0202','2025-09-08','C017','R070','D036',1,250,'NO',250,188],
+  ['O0203','2025-11-04','C061','R033','D016',1,112,'NO',112,43],
+  ['O0204','2025-04-22','C049','R026','D022',2,138,'YES',69,8],
+  ['O0205','2025-02-07','C096','R035','D035',3,128,'NO',128,171],
+  ['O0206','2025-04-05','C038','R041','D001',3,147,'YES',73.5,28.5],
+  ['O0207','2025-10-18','C067','R080','D025',2,188,'YES',94,34],
+  ['O0208','2025-05-25','C100','R055','D004',3,223,'YES',111.5,205.5],
+  ['O0209','2025-06-18','C007','R060','D036',3,145,'YES',72.5,31.5],
+  ['O0210','2025-03-11','C061','R017','D004',1,128,'NO',128,85],
+  ['O0211','2025-09-19','C004','R011','D007',3,108,'NO',108,123],
+  ['O0212','2025-03-26','C010','R068','D040',3,143,'NO',143,189],
+  ['O0213','2025-09-20','C086','R044','D015',1,231,'NO',231,152],
+  ['O0214','2025-03-25','C014','R012','D033',2,232,'YES',116,138],
+  ['O0215','2025-09-27','C049','R061','D037',4,228,'YES',114,240],
+  ['O0216','2025-11-26','C071','R080','D035',4,202,'YES',101,120],
+  ['O0217','2025-05-08','C027','R097','D024',2,228,'YES',114,116],
+  ['O0218','2025-08-08','C072','R099','D005',3,175,'NO',175,321],
+  ['O0219','2025-02-22','C063','R084','D018',4,138,'NO',138,252],
+  ['O0220','2025-09-02','C002','R095','D027',3,210,'YES',105,165],
+  ['O0221','2025-03-30','C003','R002','D047',5,170,'NO',170,425],
+  ['O0222','2025-05-03','C099','R015','D049',5,140,'YES',70,145],
+  ['O0223','2026-01-13','C097','R066','D048',1,184,'NO',184,142],
+  ['O0224','2025-10-30','C021','R069','D043',4,164,'NO',164,408],
+  ['O0225','2025-08-10','C092','R083','D028',2,141,'NO',141,132],
+  ['O0226','2025-11-15','C017','R066','D019',3,144,'NO',144,180],
+  ['O0227','2025-10-22','C058','R070','D044',2,175,'YES',87.5,35],
+  ['O0228','2025-10-25','C017','R064','D020',2,186,'NO',186,262],
+  ['O0229','2025-12-01','C056','R092','D041',1,166,'NO',166,111],
+  ['O0230','2025-04-21','C100','R036','D007',5,167,'YES',83.5,82.5],
+  ['O0231','2025-10-27','C096','R068','D012',2,216,'NO',216,286],
+  ['O0232','2025-01-29','C059','R081','D023',3,160,'YES',80,117],
+  ['O0233','2025-09-04','C043','R075','D037',4,110,'YES',55,4],
+  ['O0234','2025-06-24','C008','R060','D021',3,103,'YES',51.5,-34.5],
+  ['O0235','2026-01-13','C092','R052','D038',1,207,'NO',207,137],
+  ['O0236','2025-10-30','C048','R064','D017',5,145,'NO',145,425],
+  ['O0237','2025-10-03','C061','R043','D011',1,179,'NO',179,122],
+  ['O0238','2025-06-29','C090','R066','D019',4,243,'NO',243,636],
+  ['O0239','2025-06-23','C093','R067','D049',3,242,'YES',121,240],
+  ['O0240','2025-08-05','C042','R056','D022',3,238,'YES',119,162],
+  ['O0241','2025-09-21','C068','R059','D011',4,196,'NO',196,556],
+  ['O0242','2025-07-25','C061','R008','D035',3,204,'NO',204,399],
+  ['O0243','2025-05-11','C042','R048','D047',1,224,'YES',112,27],
+  ['O0244','2025-10-10','C030','R040','D013',5,232,'NO',232,935],
+  ['O0245','2025-05-17','C092','R047','D048',5,141,'NO',141,495],
+  ['O0246','2025-09-11','C021','R019','D038',2,179,'NO',179,218],
+  ['O0247','2025-11-22','C058','R018','D032',2,156,'YES',78,-10],
+  ['O0248','2025-05-28','C056','R053','D002',3,219,'NO',219,453],
+  ['O0249','2025-12-06','C094','R059','D050',4,109,'NO',109,112],
+  ['O0250','2025-10-06','C078','R071','D016',3,103,'NO',103,102],
+  ['O0251','2025-05-29','C094','R007','D017',1,223,'NO',223,163],
+  ['O0252','2025-04-20','C041','R063','D004',2,101,'NO',101,116],
+  ['O0253','2025-12-19','C026','R062','D028',1,160,'NO',160,85],
+  ['O0254','2025-08-07','C022','R047','D039',4,110,'YES',55,40],
+  ['O0255','2026-01-30','C037','R059','D043',5,155,'YES',77.5,77.5],
+  ['O0256','2025-11-25','C096','R027','D040',3,236,'NO',236,468],
+  ['O0257','2025-08-29','C045','R052','D006',1,186,'YES',93,8],
+  ['O0258','2025-09-18','C093','R097','D024',4,153,'YES',76.5,82],
+  ['O0259','2025-02-18','C093','R080','D012',2,185,'YES',92.5,39],
+  ['O0260','2025-11-28','C038','R061','D048',5,110,'YES',55,65],
+  ['O0261','2025-09-17','C070','R096','D003',5,164,'YES',82,-10],
+  ['O0262','2025-12-11','C070','R016','D028',5,232,'YES',116,205],
+  ['O0263','2025-11-25','C032','R003','D025',3,227,'NO',227,450],
+  ['O0264','2025-03-09','C021','R001','D049',3,248,'NO',248,621],
+  ['O0265','2025-05-08','C062','R062','D024',2,136,'YES',68,24],
+  ['O0266','2025-01-13','C018','R082','D049',5,181,'NO',181,700],
+  ['O0267','2025-09-25','C098','R047','D033',4,128,'YES',64,68],
+  ['O0268','2025-03-12','C065','R045','D031',5,145,'NO',145,280],
+  ['O0269','2025-11-05','C077','R014','D039',5,196,'NO',196,755],
+  ['O0270','2025-09-02','C097','R007','D005',4,182,'NO',182,456],
+  ['O0271','2025-04-06','C066','R042','D032',3,187,'YES',93.5,31.5],
+  ['O0272','2025-09-29','C056','R063','D048',5,185,'NO',185,715],
+  ['O0273','2025-09-10','C007','R059','D037',4,185,'YES',92.5,154],
+  ['O0274','2025-04-06','C051','R022','D020',5,218,'YES',109,270],
+  ['O0275','2025-02-11','C065','R023','D045',5,195,'NO',195,655],
+  ['O0276','2025-07-15','C068','R001','D026',1,244,'NO',244,203],
+  ['O0277','2025-07-07','C065','R026','D041',3,247,'NO',247,576],
+  ['O0278','2025-10-16','C046','R032','D014',2,115,'YES',57.5,15],
+  ['O0279','2025-07-20','C095','R042','D033',1,240,'YES',120,73],
+  ['O0280','2025-02-23','C006','R052','D045',5,215,'YES',107.5,217.5],
+  ['O0281','2026-01-28','C057','R020','D028',4,220,'YES',110,140],
+  ['O0282','2025-10-21','C100','R057','D013',5,168,'YES',84,195],
+  ['O0283','2025-11-20','C049','R027','D020',2,115,'YES',57.5,5],
+  ['O0284','2026-01-22','C048','R069','D009',4,127,'NO',127,172],
+  ['O0285','2025-03-04','C095','R066','D029',5,192,'YES',96,130],
+  ['O0286','2025-11-03','C015','R087','D014',2,244,'YES',122,144],
+  ['O0287','2025-09-01','C043','R072','D016',2,207,'YES',103.5,69],
+  ['O0288','2025-12-14','C034','R016','D021',1,176,'NO',176,113],
+  ['O0289','2026-01-11','C015','R019','D007',2,172,'YES',86,38],
+  ['O0290','2026-01-16','C063','R034','D021',3,125,'NO',125,186],
+  ['O0291','2025-01-22','C063','R095','D039',2,169,'NO',169,248],
+  ['O0292','2025-06-07','C016','R089','D008',1,157,'YES',78.5,4.5],
+  ['O0293','2025-08-07','C010','R005','D028',1,145,'NO',145,70],
+  ['O0294','2025-10-14','C100','R012','D011',1,221,'YES',110.5,53.5],
+  ['O0295','2025-11-04','C084','R014','D001',4,228,'YES',114,200],
+  ['O0296','2025-11-05','C057','R078','D039',2,206,'YES',103,116],
+  ['O0297','2025-09-07','C010','R031','D039',2,221,'NO',221,352],
+  ['O0298','2025-02-26','C039','R079','D047',2,149,'YES',74.5,-21],
+  ['O0299','2025-12-04','C073','R032','D042',3,110,'YES',55,-102],
+  ['O0300','2025-11-30','C076','R032','D042',2,224,'YES',112,46],
+  ['O0301','2025-04-10','C037','R068','D035',5,189,'YES',94.5,117.5],
+  ['O0302','2025-06-13','C093','R035','D027',2,237,'YES',118.5,137],
+  ['O0303','2025-11-04','C011','R042','D017',4,180,'NO',180,480],
+  ['O0304','2025-06-12','C036','R066','D015',3,162,'NO',162,249],
+  ['O0305','2026-01-25','C010','R068','D044',4,138,'NO',138,272],
+  ['O0306','2025-05-24','C002','R035','D042',3,174,'YES',87,-6],
+  ['O0307','2025-05-01','C088','R097','D047',3,119,'NO',119,102],
+  ['O0308','2025-06-27','C094','R061','D046',5,111,'NO',111,340],
+  ['O0309','2025-05-15','C037','R041','D045',2,147,'YES',73.5,19],
+  ['O0310','2025-05-21','C032','R036','D048',4,156,'NO',156,456],
+  ['O0311','2025-05-06','C011','R003','D001',1,225,'NO',225,161],
+  ['O0312','2025-02-23','C071','R010','D040',2,213,'YES',106.5,53],
+  ['O0313','2025-12-31','C090','R066','D007',1,247,'NO',247,180],
+  ['O0314','2025-06-02','C065','R097','D020',2,245,'NO',245,380],
+  ['O0315','2025-12-18','C057','R055','D020',2,130,'YES',65,20],
+  ['O0316','2025-07-18','C027','R082','D028',1,200,'YES',100,25],
+  ['O0317','2025-12-05','C035','R068','D028',3,244,'YES',122,141],
+  ['O0318','2025-06-08','C057','R067','D042',5,246,'YES',123,170],
+  ['O0319','2025-02-03','C004','R073','D039',4,119,'NO',119,296],
+  ['O0320','2025-05-20','C030','R075','D029',4,121,'NO',121,204],
+  ['O0321','2025-10-15','C079','R033','D029',3,155,'NO',155,255],
+  ['O0322','2026-02-02','C014','R082','D032',2,250,'YES',125,84],
+  ['O0323','2025-03-02','C065','R031','D014',5,224,'NO',224,870],
+  ['O0324','2025-04-24','C086','R013','D020',2,203,'NO',203,296],
+  ['O0325','2025-06-10','C093','R100','D035',3,159,'YES',79.5,25.5],
+  ['O0326','2025-05-25','C100','R053','D044',5,139,'YES',69.5,-2.5],
+  ['O0327','2025-08-02','C026','R021','D038',4,177,'NO',177,428],
+  ['O0328','2025-05-31','C091','R036','D035',4,224,'NO',224,612],
+  ['O0329','2025-10-08','C030','R082','D032',5,138,'NO',138,275],
+  ['O0330','2025-07-11','C035','R089','D004',2,229,'YES',114.5,143],
+  ['O0331','2025-06-27','C093','R015','D041',4,102,'YES',51,-16],
+  ['O0332','2025-01-11','C027','R093','D008',5,222,'YES',111,185],
+  ['O0333','2025-06-01','C036','R086','D027',3,229,'NO',229,537],
+  ['O0334','2025-04-23','C040','R026','D037',2,246,'NO',246,384],
+  ['O0335','2025-06-14','C018','R092','D005',5,145,'NO',145,385],
+  ['O0336','2026-01-07','C052','R043','D014',5,222,'NO',222,860],
+  ['O0337','2026-01-17','C082','R001','D019',4,149,'YES',74.5,-38],
+  ['O0338','2025-10-14','C029','R096','D003',5,175,'NO',175,455],
+  ['O0339','2025-02-12','C098','R015','D035',2,116,'YES',58,-26],
+  ['O0340','2025-05-16','C007','R001','D021',1,138,'YES',69,6],
+  ['O0341','2025-07-27','C023','R061','D040',3,186,'NO',186,318],
+  ['O0342','2025-08-16','C030','R035','D005',1,143,'NO',143,75],
+  ['O0343','2025-07-02','C086','R065','D044',3,130,'NO',130,180],
+  ['O0344','2025-09-19','C071','R023','D032',5,207,'YES',103.5,102.5],
+  ['O0345','2025-08-12','C054','R046','D015',3,120,'NO',120,123],
+  ['O0346','2025-02-07','C077','R055','D012',4,237,'NO',237,656],
+  ['O0347','2025-11-01','C010','R078','D019',2,189,'NO',189,210],
+  ['O0348','2025-11-06','C097','R007','D007',3,204,'NO',204,411],
+  ['O0349','2025-02-18','C088','R049','D030',1,157,'NO',157,95],
+  ['O0350','2025-10-28','C037','R057','D011',5,107,'YES',53.5,-17.5],
+  ['O0351','2025-10-06','C090','R017','D022',3,108,'NO',108,129],
+  ['O0352','2026-01-21','C022','R074','D009',1,185,'YES',92.5,8.5],
+  ['O0353','2025-11-08','C091','R009','D031',1,106,'NO',106,17],
+  ['O0354','2025-10-18','C048','R073','D014',1,178,'NO',178,128],
+  ['O0355','2025-04-08','C053','R084','D020',3,145,'YES',72.5,52.5],
+  ['O0356','2026-01-09','C043','R035','D036',3,238,'YES',119,171],
+  ['O0357','2025-03-16','C093','R062','D006',1,169,'YES',84.5,-0.5],
+  ['O0358','2025-09-02','C046','R086','D049',1,180,'YES',90,49],
+  ['O0359','2025-04-29','C044','R062','D011',4,164,'NO',164,428],
+  ['O0360','2025-11-26','C100','R100','D039',1,177,'YES',88.5,43.5],
+  ['O0361','2025-10-21','C061','R091','D046',4,153,'NO',153,440],
+  ['O0362','2025-09-10','C092','R100','D048',1,183,'NO',183,141],
+  ['O0363','2025-01-23','C008','R003','D032',1,153,'YES',76.5,-6.5],
+  ['O0364','2025-06-08','C092','R019','D018',2,159,'NO',159,168],
+  ['O0365','2025-11-15','C040','R008','D017',1,222,'NO',222,162],
+  ['O0366','2025-02-08','C065','R100','D020',4,119,'NO',119,256],
+  ['O0367','2026-01-31','C032','R002','D037',5,216,'NO',216,810],
+  ['O0368','2025-10-17','C099','R045','D002',2,103,'YES',51.5,-33],
+  ['O0369','2025-05-10','C024','R085','D032',4,248,'YES',124,164],
+  ['O0370','2025-06-13','C006','R074','D034',2,248,'YES',124,104],
+  ['O0371','2025-11-16','C099','R077','D040',3,215,'YES',107.5,82.5],
+  ['O0372','2025-01-17','C089','R063','D046',4,185,'NO',185,568],
+  ['O0373','2025-05-16','C008','R068','D010',3,122,'YES',61,-3],
+  ['O0374','2025-04-08','C017','R022','D030',5,239,'NO',239,885],
+  ['O0375','2025-12-10','C042','R054','D026',4,149,'YES',74.5,134],
+  ['O0376','2025-03-13','C080','R068','D010',2,194,'NO',194,264],
+  ['O0377','2025-09-23','C080','R008','D005',5,133,'NO',133,325],
+  ['O0378','2025-03-21','C017','R011','D010',3,164,'NO',164,306],
+  ['O0379','2025-02-12','C036','R062','D004',4,139,'NO',139,384],
+  ['O0380','2025-10-22','C077','R007','D041',4,226,'NO',226,684],
+  ['O0381','2025-01-28','C033','R012','D001',1,120,'NO',120,56],
+  ['O0382','2025-11-05','C009','R019','D005',2,116,'YES',58,-20],
+  ['O0383','2025-09-06','C071','R059','D010',3,121,'YES',60.5,-4.5],
+  ['O0384','2025-09-23','C076','R003','D028',3,221,'YES',110.5,106.5],
+  ['O0385','2026-01-07','C095','R073','D020',3,230,'YES',115,180],
+  ['O0386','2025-03-01','C059','R040','D007',1,249,'YES',124.5,57.5],
+  ['O0387','2025-09-13','C022','R086','D013',1,195,'YES',97.5,52.5],
+  ['O0388','2025-09-29','C073','R084','D016',4,156,'YES',78,36],
+  ['O0389','2025-08-12','C055','R038','D037',3,208,'NO',208,462],
+  ['O0390','2025-03-12','C004','R005','D010',4,139,'NO',139,308],
+  ['O0391','2025-12-08','C012','R077','D019',2,169,'NO',169,170],
+  ['O0392','2025-10-17','C024','R036','D032',4,190,'YES',95,48],
+  ['O0393','2025-11-13','C004','R093','D037',3,201,'NO',201,441],
+  ['O0394','2025-03-27','C093','R093','D013',5,114,'YES',57,60],
+  ['O0395','2025-05-28','C076','R081','D019',1,111,'YES',55.5,-28.5],
+  ['O0396','2025-06-21','C066','R065','D020',3,123,'YES',61.5,19.5],
+  ['O0397','2025-06-01','C061','R094','D016',3,113,'NO',113,132],
+  ['O0398','2026-01-27','C087','R056','D033',4,218,'NO',218,684],
+  ['O0399','2025-08-06','C023','R097','D011',1,197,'NO',197,140],
+  ['O0400','2025-06-24','C075','R064','D040',2,163,'YES',81.5,3],
+  ['O0401','2025-07-13','C017','R051','D048',5,203,'NO',203,805],
+  ['O0402','2025-09-16','C083','R044','D002',3,131,'YES',65.5,-7.5],
+  ['O0403','2025-01-08','C026','R080','D042',2,150,'NO',150,122],
+  ['O0404','2025-02-16','C068','R072','D029',5,121,'NO',121,255],
+  ['O0405','2026-01-26','C074','R096','D016',4,160,'NO',160,364],
+  ['O0406','2025-07-07','C095','R046','D028',2,142,'YES',71,-8],
+  ['O0407','2026-01-02','C052','R071','D050',4,181,'NO',181,400],
+  ['O0408','2025-01-16','C097','R022','D015',1,141,'NO',141,62],
+  ['O0409','2025-05-15','C033','R098','D035',4,246,'NO',246,700],
+  ['O0410','2025-05-22','C098','R097','D020',3,202,'YES',101,138],
+  ['O0411','2025-06-05','C090','R066','D048',3,100,'NO',100,174],
+  ['O0412','2025-12-26','C024','R093','D015',3,141,'YES',70.5,-25.5],
+  ['O0413','2025-02-08','C086','R038','D043',4,105,'NO',105,172],
+  ['O0414','2025-09-05','C084','R079','D030',5,235,'YES',117.5,277.5],
+  ['O0415','2025-02-07','C015','R096','D032',5,113,'YES',56.5,-132.5],
+  ['O0416','2025-08-22','C060','R044','D047',5,176,'NO',176,455],
+  ['O0417','2025-06-12','C031','R066','D045',3,225,'NO',225,483],
+  ['O0418','2025-02-20','C031','R012','D031',1,183,'NO',183,94],
+  ['O0419','2025-11-29','C028','R023','D019',1,217,'NO',217,133],
+  ['O0420','2025-06-11','C015','R039','D025',4,233,'YES',116.5,158],
+  ['O0421','2025-11-20','C096','R069','D004',1,134,'NO',134,91],
+  ['O0422','2025-11-24','C066','R008','D005',1,220,'YES',110,42],
+  ['O0423','2025-09-22','C039','R019','D032',1,102,'YES',51,-32],
+  ['O0424','2025-08-01','C056','R049','D049',1,236,'NO',236,195],
+  ['O0425','2025-12-23','C085','R014','D037',4,220,'YES',110,224],
+  ['O0426','2025-05-23','C006','R026','D015',4,159,'YES',79.5,2],
+  ['O0427','2025-08-12','C062','R028','D032',5,111,'YES',55.5,-137.5],
+  ['O0428','2025-02-01','C010','R012','D010',1,137,'NO',137,75],
+  ['O0429','2026-01-15','C007','R071','D020',1,241,'YES',120.5,65.5],
+  ['O0430','2025-07-31','C024','R019','D022',2,151,'YES',75.5,21],
+  ['O0431','2025-05-29','C051','R088','D035',4,140,'YES',70,-4],
+  ['O0432','2025-12-19','C030','R086','D010',1,130,'NO',130,68],
+  ['O0433','2025-10-18','C012','R054','D039',2,160,'NO',160,230],
+  ['O0434','2025-05-13','C070','R018','D022',2,234,'YES',117,104],
+  ['O0435','2025-06-19','C061','R016','D014',3,225,'NO',225,525],
+  ['O0436','2025-01-03','C084','R033','D033',2,155,'YES',77.5,61],
+  ['O0437','2025-12-18','C056','R044','D013',2,211,'NO',211,332],
+  ['O0438','2025-11-22','C072','R069','D037',5,153,'NO',153,495],
+  ['O0439','2025-03-17','C060','R011','D015',2,234,'NO',234,310],
+  ['O0440','2025-08-18','C044','R013','D019',3,147,'NO',147,189],
+  ['O0441','2026-01-09','C080','R091','D050',3,226,'NO',226,435],
+  ['O0442','2025-02-20','C020','R015','D039',4,167,'YES',83.5,154],
+  ['O0443','2025-04-11','C015','R039','D012',2,168,'YES',84,22],
+  ['O0444','2025-12-02','C091','R044','D035',1,129,'NO',129,58],
+  ['O0445','2025-01-08','C054','R075','D023',4,167,'NO',167,504],
+  ['O0446','2025-02-14','C022','R030','D035',2,161,'YES',80.5,19],
+  ['O0447','2026-01-01','C076','R011','D029',4,188,'YES',94,96],
+  ['O0448','2025-03-12','C050','R051','D012',5,231,'YES',115.5,212.5],
+  ['O0449','2025-05-31','C012','R068','D017',5,101,'NO',101,205],
+  ['O0450','2025-07-24','C076','R070','D023',3,184,'YES',92,153],
+  ['O0451','2025-09-30','C088','R043','D037',1,195,'NO',195,141],
+  ['O0452','2025-11-07','C057','R065','D049',4,142,'YES',71,120],
+  ['O0453','2025-02-19','C095','R035','D048',2,249,'YES',124.5,165],
+  ['O0454','2025-02-09','C011','R005','D042',3,173,'NO',173,252],
+  ['O0455','2025-01-04','C026','R057','D016',4,188,'NO',188,476],
+  ['O0456','2025-08-06','C008','R071','D017',4,116,'YES',58,-8],
+  ['O0457','2025-01-09','C063','R004','D039',5,124,'NO',124,395],
+  ['O0458','2025-05-05','C005','R065','D001',4,242,'NO',242,712],
+  ['O0459','2025-11-06','C029','R001','D047',3,136,'NO',136,153],
+  ['O0460','2025-01-29','C046','R001','D033',3,246,'YES',123,228],
+  ['O0461','2025-07-14','C055','R018','D022',5,108,'NO',108,215],
+  ['O0462','2025-02-21','C040','R093','D040',3,168,'NO',168,264],
+  ['O0463','2025-10-26','C078','R065','D018',5,249,'NO',249,870],
+  ['O0464','2025-05-05','C065','R036','D009',4,221,'NO',221,548],
+  ['O0465','2025-02-28','C059','R078','D038',3,199,'YES',99.5,88.5],
+  ['O0466','2025-04-07','C012','R040','D035',4,135,'NO',135,256],
+  ['O0467','2025-05-23','C045','R051','D014',3,190,'YES',95,135],
+  ['O0468','2025-01-04','C041','R046','D049',2,172,'NO',172,262],
+  ['O0469','2025-06-25','C046','R067','D011',2,239,'YES',119.5,125],
+  ['O0470','2025-05-11','C014','R061','D009',1,221,'YES',110.5,26.5],
+  ['O0471','2025-09-02','C094','R027','D003',1,207,'NO',207,123],
+  ['O0472','2026-01-11','C036','R100','D025',5,137,'NO',137,300],
+  ['O0473','2025-10-12','C011','R019','D049',2,185,'NO',185,288],
+  ['O0474','2026-01-19','C009','R034','D025',3,146,'YES',73,-12],
+  ['O0475','2026-01-29','C036','R049','D012',1,192,'NO',192,119],
+  ['O0476','2025-04-29','C016','R021','D018',3,193,'YES',96.5,64.5],
+  ['O0477','2025-10-05','C014','R031','D039',3,188,'YES',94,147],
+  ['O0478','2025-09-17','C054','R023','D012',3,227,'NO',227,462],
+  ['O0479','2025-05-25','C027','R079','D011',3,110,'YES',55,-6],
+  ['O0480','2025-06-18','C085','R088','D046',4,101,'YES',50.5,30],
+  ['O0481','2025-10-16','C052','R015','D027',4,162,'NO',162,448],
+  ['O0482','2025-12-28','C024','R086','D008',2,168,'YES',84,20],
+  ['O0483','2025-11-04','C053','R016','D013',4,123,'YES',61.5,66],
+  ['O0484','2025-05-07','C025','R061','D044',5,232,'NO',232,810],
+  ['O0485','2025-10-26','C017','R010','D050',2,199,'NO',199,236],
+  ['O0486','2025-09-14','C083','R085','D023',1,172,'YES',86,45],
+  ['O0487','2025-04-09','C016','R080','D002',3,191,'YES',95.5,82.5],
+  ['O0488','2025-02-24','C094','R018','D025',1,102,'NO',102,25],
+  ['O0489','2025-01-13','C049','R097','D032',4,152,'YES',76,-28],
+  ['O0490','2025-11-14','C037','R030','D034',1,145,'YES',72.5,0.5],
+  ['O0491','2025-05-14','C034','R054','D024',5,135,'NO',135,395],
+  ['O0492','2026-01-03','C069','R098','D015',1,135,'YES',67.5,-11.5],
+  ['O0493','2025-04-21','C013','R072','D002',3,158,'YES',79,33],
+  ['O0494','2025-08-19','C074','R093','D023',3,104,'NO',104,189],
+  ['O0495','2025-04-26','C032','R057','D049',1,130,'NO',130,89],
+  ['O0496','2025-03-06','C081','R098','D010',3,155,'YES',77.5,46.5],
+  ['O0497','2025-05-07','C095','R054','D047',4,114,'YES',57,-112],
+  ['O0498','2025-02-26','C083','R094','D045',3,122,'YES',61,-9],
+  ['O0499','2025-12-13','C008','R052','D033',2,236,'YES',118,142],
+  ['O0500','2025-11-10','C035','R096','D003',2,159,'YES',79.5,-9]
+];
+
+// Parse orders into objects
+const orders = rawOrders.map(r => ({
+  id:r[0], date:r[1], customer:r[2], restaurant:r[3], dessert:r[4],
+  qty:r[5], price:r[6], discount:r[7], discPrice:r[8], profit:r[9]
+}));
+
+// State
+let filtered = [...orders];
+
+// Populate slicer dropdowns
+const cids = [...new Set(orders.map(o=>o.customer))].sort();
+const rids = [...new Set(orders.map(o=>o.restaurant))].sort();
+const dids = [...new Set(orders.map(o=>o.dessert))].sort();
+cids.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; document.getElementById('sCustomer').appendChild(o); });
+rids.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; document.getElementById('sRestaurant').appendChild(o); });
+dids.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; document.getElementById('sDessert').appendChild(o); });
+
+['sDiscount','sCustomer','sRestaurant','sDessert'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+
+function applyFilters() {
+  const d = document.getElementById('sDiscount').value;
+  const c = document.getElementById('sCustomer').value;
+  const r = document.getElementById('sRestaurant').value;
+  const ds = document.getElementById('sDessert').value;
+  filtered = orders.filter(o =>
+    (!d || o.discount===d) &&
+    (!c || o.customer===c) &&
+    (!r || o.restaurant===r) &&
+    (!ds || o.dessert===ds)
+  );
+  renderAll();
+}
+
+function resetFilters() {
+  ['sDiscount','sCustomer','sRestaurant','sDessert'].forEach(id => document.getElementById(id).value='');
+  filtered = [...orders];
+  renderAll();
+}
+
+let barChart, colChart, lineChart;
+
+function renderAll() {
+  renderKPIs();
+  renderMainPivot();
+  renderRestaurantProfit();
+  renderDiscountBar();
+  renderDiscountColPivot();
+  renderMonthlyLine();
+  renderDiscountAnalysis();
+}
+
+function renderKPIs() {
+  const totalProfit = filtered.reduce((s,o)=>s+o.profit,0);
+  const totalQty = filtered.reduce((s,o)=>s+o.qty,0);
+  const yesOrders = filtered.filter(o=>o.discount==='YES');
+  const yesProfit = yesOrders.reduce((s,o)=>s+o.profit,0);
+  const noOrders = filtered.filter(o=>o.discount==='NO');
+  const noProfit = noOrders.reduce((s,o)=>s+o.profit,0);
+
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="kpi amber"><div class="kpi-label">Total Profit</div><div class="kpi-value">₹${totalProfit.toLocaleString('en-IN',{maximumFractionDigits:0})}</div><div class="kpi-sub">${filtered.length} orders</div></div>
+    <div class="kpi accent"><div class="kpi-label">Total Quantity</div><div class="kpi-value">${totalQty.toLocaleString()}</div><div class="kpi-sub">Items sold</div></div>
+    <div class="kpi green"><div class="kpi-label">Discounted Profit</div><div class="kpi-value">₹${yesProfit.toLocaleString('en-IN',{maximumFractionDigits:0})}</div><div class="kpi-sub">${yesOrders.length} YES orders</div></div>
+    <div class="kpi red"><div class="kpi-label">Non-Discount Profit</div><div class="kpi-value">₹${noProfit.toLocaleString('en-IN',{maximumFractionDigits:0})}</div><div class="kpi-sub">${noOrders.length} NO orders</div></div>
+  `;
+}
+
+function renderMainPivot() {
+  const map = {};
+  filtered.forEach(o => {
+    const key = `${o.customer}|${o.restaurant}|${o.discount}`;
+    if (!map[key]) map[key] = {customer:o.customer, restaurant:o.restaurant, discount:o.discount, profit:0, qty:0, count:0};
+    map[key].profit += o.profit;
+    map[key].qty += o.qty;
+    map[key].count++;
+  });
+  const rows = Object.values(map).sort((a,b)=>b.profit-a.profit);
+  document.getElementById('orderCount').textContent = `${rows.length} combinations`;
+  let html = `<table><thead><tr><th>Customer</th><th>Restaurant</th><th>Discount</th><th>Sum of Profit</th><th>Sum of Quantity</th><th>Count of Orders</th></tr></thead><tbody>`;
+  rows.forEach(r => {
+    html += `<tr><td>${r.customer}</td><td>${r.restaurant}</td><td><span class="badge ${r.discount==='YES'?'badge-yes':'badge-no'}">${r.discount}</span></td><td class="${r.profit>=0?'profit-pos':'profit-neg'}">₹${r.profit.toFixed(1)}</td><td>${r.qty}</td><td>${r.count}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('mainPivotWrap').innerHTML = html;
+}
+
+function renderRestaurantProfit() {
+  const map = {};
+  filtered.forEach(o => {
+    if (!map[o.restaurant]) map[o.restaurant] = 0;
+    map[o.restaurant] += o.profit;
+  });
+  const rows = Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  let html = `<table><thead><tr><th>Restaurant</th><th>Sum of Profit</th></tr></thead><tbody>`;
+  rows.forEach(([r,p]) => {
+    html += `<tr><td>${r}</td><td class="${p>=0?'profit-pos':'profit-neg'}">₹${p.toFixed(1)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('restProfitWrap').innerHTML = html;
+}
+
+function renderDiscountBar() {
+  const yes = filtered.filter(o=>o.discount==='YES').reduce((s,o)=>s+o.profit,0);
+  const no = filtered.filter(o=>o.discount==='NO').reduce((s,o)=>s+o.profit,0);
+  const ctx = document.getElementById('discountBarChart').getContext('2d');
+  if (barChart) barChart.destroy();
+  barChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['YES (Discounted)','NO (Full Price)'],
+      datasets:[{
+        label:'Sum of Profit',
+        data:[yes,no],
+        backgroundColor:['rgba(74,222,128,0.7)','rgba(124,106,255,0.7)'],
+        borderColor:['#4ade80','#7c6aff'],
+        borderWidth:2, borderRadius:8
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>`₹${c.raw.toFixed(0)}`}}},
+      scales:{
+        x:{ticks:{color:'#7070a0'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'#7070a0',callback:v=>`₹${v}`},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+function renderDiscountColPivot() {
+  const yes = filtered.filter(o=>o.discount==='YES').reduce((s,o)=>s+o.profit,0);
+  const no = filtered.filter(o=>o.discount==='NO').reduce((s,o)=>s+o.profit,0);
+  document.getElementById('discountPivotTable').innerHTML = `
+    <table>
+      <thead><tr><th>Discount Eligible</th><th>Sum of Profit</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge badge-yes">YES</span></td><td class="profit-pos">₹${yes.toFixed(1)}</td></tr>
+        <tr><td><span class="badge badge-no">NO</span></td><td class="${no>=0?'profit-pos':'profit-neg'}">₹${no.toFixed(1)}</td></tr>
+        <tr style="font-weight:600"><td>Grand Total</td><td class="${(yes+no)>=0?'profit-pos':'profit-neg'}">₹${(yes+no).toFixed(1)}</td></tr>
+      </tbody>
+    </table>`;
+  const ctx = document.getElementById('discountColChart').getContext('2d');
+  if (colChart) colChart.destroy();
+  colChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['YES','NO'],
+      datasets:[{label:'Profit',data:[yes,no],backgroundColor:['rgba(245,166,35,0.8)','rgba(248,113,113,0.7)'],borderRadius:6}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#7070a0'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'#7070a0',callback:v=>`₹${v}`},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+function renderMonthlyLine() {
+  const map = {};
+  filtered.forEach(o => {
+    const month = o.date.substring(0,7);
+    if (!map[month]) map[month] = 0;
+    map[month] += o.profit;
+  });
+  const sorted = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]));
+  const labels = sorted.map(([m])=>{ const d=new Date(m+'-01'); return d.toLocaleString('default',{month:'short',year:'2-digit'}); });
+  const data = sorted.map(([,v])=>v);
+  const ctx = document.getElementById('monthlyLineChart').getContext('2d');
+  if (lineChart) lineChart.destroy();
+  lineChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'Monthly Profit',
+        data,
+        borderColor:'#f5a623',
+        backgroundColor:'rgba(245,166,35,0.1)',
+        borderWidth:2.5,
+        fill:true,
+        tension:0.4,
+        pointBackgroundColor:'#f5a623',
+        pointRadius:4
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>`₹${c.raw.toFixed(0)}`}}},
+      scales:{
+        x:{ticks:{color:'#7070a0',maxRotation:45},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'#7070a0',callback:v=>`₹${v}`},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+function renderDiscountAnalysis() {
+  // Restaurants where customer Total_Orders >= 1000 => eligible for 50% discount
+  // Calculate profit with 50% discount applied
+  const restMap = {};
+  orders.forEach(o => {
+    const cust = customers[o.customer];
+    if (!cust || cust.orders < 1000) return; // only >=1000 order customers
+    if (!restMap[o.restaurant]) restMap[o.restaurant] = {profit:0, orders:0};
+    // Apply 50% discount to price to get discounted price, then profit = discountedPrice - cost
+    // We'll use actual profit as proxy but recalculate: if discount applied, profit = (price*0.5)*qty - cost*qty
+    // From data: profit = discountedPrice*qty - costPrice*qty
+    // Cost = discountedPrice - (profit/qty) -- but easier: use actual profit column for discounted orders
+    // For this analysis: simulate if all orders from high-value customers had 50% discount
+    // cost_per_unit = price - (profit/qty) [from non-discounted]
+    const cost = o.price - (o.profit / o.qty);
+    const discProfit = (o.price * 0.5 - cost) * o.qty;
+    restMap[o.restaurant].profit += discProfit;
+    restMap[o.restaurant].orders++;
+  });
+
+  const profitable = [], loss = [];
+  Object.entries(restMap).forEach(([r, d]) => {
+    if (d.profit > 0) profitable.push({r, profit:d.profit, orders:d.orders});
+    else loss.push({r, profit:d.profit, orders:d.orders});
+  });
+  profitable.sort((a,b)=>b.profit-a.profit);
+  loss.sort((a,b)=>a.profit-b.profit);
+
+  const pHtml = profitable.map(x=>`
+    <div class="rest-item">
+      <span>${x.r}</span>
+      <span class="profit-pos">₹${x.profit.toFixed(0)} (${x.orders} orders)</span>
+    </div>`).join('');
+  const lHtml = loss.map(x=>`
+    <div class="rest-item">
+      <span>${x.r}</span>
+      <span class="profit-neg">₹${x.profit.toFixed(0)} (${x.orders} orders)</span>
+    </div>`).join('');
+
+  document.getElementById('profitRestList').innerHTML = pHtml || '<p style="color:var(--muted);font-size:12px">None</p>';
+  document.getElementById('lossRestList').innerHTML = lHtml || '<p style="color:var(--muted);font-size:12px">None</p>';
+}
+
+// Initial render
+renderAll();
+</script>
+</body>
+</html>
